@@ -3,6 +3,7 @@ import { mlsmpmParticleStructSize, MLSMPMSimulator } from './mls-mpm/mls-mpm'
 import { renderUniformsViews, renderUniformsValues } from './camera'
 import { FluidRenderer } from './render/fluidRender'
 import GUI from 'lil-gui';
+import { startWebGPUXR, xrInput } from './xr'
 
 /// <reference types="@webgpu/types" />
 
@@ -65,7 +66,7 @@ function initGui(particleCountTexts: string[]) {
 		b:240,  
 		speed: 0.8, 
 		colorDensity: 0.7, 
-		numParticles: particleCountTexts[1], 
+		numParticles: particleCountTexts[0],
 		toggleSimulation: () => {
 			params.running = !params.running;
 		}
@@ -256,6 +257,27 @@ async function main() {
 
 	console.log("simulator initialization done")
 
+	const xrButton = document.getElementById('enter-vr') as HTMLButtonElement
+	if (navigator.xr) {
+		xrButton.hidden = false
+		xrButton.onclick = async () => {
+			try {
+				xrButton.disabled = true
+				await startWebGPUXR(device, (_view, target) => {
+					const xrEncoder = device.createCommandEncoder()
+					device.queue.writeBuffer(renderUniformBuffer, 0, renderUniformsValues)
+					mlsmpmRenderer.execute(null, xrEncoder, mlsmpmSimulator.numParticles, sphereRenderFl,
+						[guiParams.r / 255, guiParams.g / 255, guiParams.b / 255], guiParams.colorDensity, target)
+					device.queue.submit([xrEncoder.finish()])
+				})
+			} catch (error) {
+				console.warn(error)
+				xrButton.disabled = false
+				alert('WebGPU WebXR is not available in this browser/device. Desktop WebGPU remains available.')
+			}
+		}
+	}
+
 	const camera = new Camera(canvasElement)
 
 	// デバイスロストの監視
@@ -322,9 +344,9 @@ async function main() {
 		const commandEncoder = device.createCommandEncoder()
 
 		let maxDt = 0.4;
-		mlsmpmSimulator.execute(commandEncoder, 
-			[camera.currentHoverX / canvas.clientWidth, camera.currentHoverY / canvas.clientHeight], 
-			camera.calcMouseVelocity(), simulationParam.mouseRadius, sphereRenderFl, maxDt * guiParams.speed, guiParams.running,
+		mlsmpmSimulator.execute(commandEncoder,
+			xrInput.active ? xrInput.pointer : [camera.currentHoverX / canvas.clientWidth, camera.currentHoverY / canvas.clientHeight],
+			xrInput.active ? xrInput.velocity : camera.calcMouseVelocity(), simulationParam.mouseRadius, sphereRenderFl, maxDt * guiParams.speed, guiParams.running,
 			densityGridSize
 		)	
 		let normalizedDiffuseColor = [guiParams.r / 255, guiParams.g / 255, guiParams.b / 255];

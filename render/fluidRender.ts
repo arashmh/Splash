@@ -482,8 +482,9 @@ export class FluidRenderer {
     }
 
 
-    execute(context: GPUCanvasContext, commandEncoder: GPUCommandEncoder, 
+    execute(context: GPUCanvasContext | null, commandEncoder: GPUCommandEncoder,
         numParticles: number, sphereRenderFl: boolean, diffuseColor: number[], colorDensity: number
+        , targetView?: GPUTextureView
     ) 
     {
         const diffuseColorArray = new Float32Array(diffuseColor)
@@ -559,10 +560,11 @@ export class FluidRenderer {
             ],
         }
 
+        const outputView = targetView ?? context!.getCurrentTexture().createView()
         const fluidPassDescriptor: GPURenderPassDescriptor = {
             colorAttachments: [
                 {
-                    view: context.getCurrentTexture().createView(),
+                        view: outputView,
                     clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
                     loadOp: 'clear',
                     storeOp: 'store',
@@ -612,7 +614,7 @@ export class FluidRenderer {
         const densityRaymarchPassDescriptor: GPURenderPassDescriptor = {
             colorAttachments: [
                 { 
-                    view: context.getCurrentTexture().createView(),
+                        view: outputView,
                     clearValue: { r: 0.7, g: 0.7, b: 0.75, a: 1.0 },
                     loadOp: 'clear',
                     storeOp: 'store',
