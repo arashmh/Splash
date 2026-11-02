@@ -15,16 +15,14 @@ export async function startWebGPUXR(device: GPUDevice, renderEye: XREyeRenderer)
     throw new Error('WebXR or WebGPU is not available in this browser.')
   }
   if (!('XRGPUBinding' in globalThis)) {
-    throw new Error('This browser does not expose the WebGPU WebXR binding. Enable WebGPU WebXR in Quest Browser experimental flags.')
+    throw new Error('XRGPUBinding is missing. In Quest Browser 152.1, enable "WebXR Experiments" at chrome://flags and restart the browser. WebGPU flags alone do not enable this binding.')
   }
 
-  const supported = await navigator.xr.isSessionSupported?.('immersive-vr')
-  if (supported === false) {
-    throw new Error('Immersive VR is not supported by this headset/browser.')
-  }
-
+  // Request directly from the button gesture, without an asynchronous probe
+  // that can consume the transient user activation required for immersive VR.
   const session = await navigator.xr.requestSession('immersive-vr', {
-    requiredFeatures: ['webgpu', 'local-floor'],
+    requiredFeatures: ['webgpu'],
+    optionalFeatures: ['local-floor'],
   })
   const binding = new (globalThis as any).XRGPUBinding(session, device) as XRGPUBinding
   const layer = binding.createProjectionLayer({
@@ -33,6 +31,7 @@ export async function startWebGPUXR(device: GPUDevice, renderEye: XREyeRenderer)
   })
   session.updateRenderState({ layers: [layer] })
   let referenceSpace = await session.requestReferenceSpace('local-floor')
+    .catch(() => session.requestReferenceSpace('local'))
   let previousGrip: { x: number; y: number; z: number } | null = null
   xrInput.active = true
   session.addEventListener('end', () => { xrInput.active = false })

@@ -276,7 +276,10 @@ async function main() {
 			} catch (error) {
 				console.warn(error)
 				xrButton.disabled = false
-				alert('WebGPU WebXR is not available in this browser/device. Desktop WebGPU remains available.')
+                const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+                const message = `VR startup failed: ${reason}`
+                document.getElementById('error-reason')!.textContent = message
+                alert(message)
 			}
 		}
 	}
