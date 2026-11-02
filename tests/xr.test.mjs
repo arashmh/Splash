@@ -21,7 +21,7 @@ test('XR frame loop, Quest axes, stick rotation, tracking loss and teardown', as
   const camera = renderUniformsViews.invViewMatrix
   assert.equal(Math.hypot(camera[0],camera[1],camera[2]),1,'XR camera must not scale particle radii')
   assert.equal(camera[12],30,'camera translation remains in simulation units')
-  assert.equal(camera[14],90,'spawn remains outside tank')
+  assert.equal(camera[14],75,'spawn remains 1.2 metres outside the larger tank')
   const initial=xrInput.position[2]
   left.gamepad.axes[3]=-1
   callback(1020,frame)

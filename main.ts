@@ -128,12 +128,14 @@ async function main() {
 			return createImageBitmap(await response.blob());
 		});
 		const imageBitmaps = await Promise.all(promises);
+		const mipLevelCount = 1 + Math.floor(Math.log2(imageBitmaps[0].width));
 
 		cubemapTexture = device.createTexture({
 			dimension: '2d',
 			// Create a 2d array texture.
 			// Assume each image has the same size.
 			size: [imageBitmaps[0].width, imageBitmaps[0].height, 6],
+			mipLevelCount,
 			format: 'rgba8unorm',
 			usage:
 			GPUTextureUsage.TEXTURE_BINDING |
@@ -148,6 +150,14 @@ async function main() {
 				{ texture: cubemapTexture, origin: [0, 0, i] },
 				[imageBitmap.width, imageBitmap.height]
 			);
+			for (let mip = 1; mip < mipLevelCount; mip++) {
+				const width = Math.max(1, imageBitmap.width >> mip);
+				const height = Math.max(1, imageBitmap.height >> mip);
+				const reduced = await createImageBitmap(imageBitmap, {resizeWidth: width, resizeHeight: height, resizeQuality: 'high'});
+				device.queue.copyExternalImageToTexture({source: reduced}, {texture: cubemapTexture, origin: [0,0,i], mipLevel: mip}, [width,height]);
+				reduced.close();
+			}
+			imageBitmap.close();
 		}
 	}
 
@@ -369,6 +379,8 @@ async function main() {
 		mlsmpmSimulator.mouseInfoViews.xrEnabled[0] = xrInput.active ? (xrInput.tracked ? 1 : -1) : 0
 		mlsmpmSimulator.mouseInfoViews.xrPosition.set(xrInput.position)
 		mlsmpmSimulator.mouseInfoViews.xrVelocity.set(xrInput.velocity)
+		mlsmpmSimulator.mouseInfoViews.xrOrigin.set(xrInput.origin)
+		mlsmpmSimulator.mouseInfoViews.xrOriginVelocity.set(xrInput.originVelocity)
 		mlsmpmSimulator.execute(commandEncoder,
 			[camera.currentHoverX / canvas.clientWidth, camera.currentHoverY / canvas.clientHeight],
 			xrInput.active ? [0,0] : camera.calcMouseVelocity(), xrInput.active ? 5 : simulationParam.mouseRadius, sphereRenderFl, maxDt * guiParams.speed, guiParams.running,

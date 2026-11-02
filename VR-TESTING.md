@@ -13,16 +13,19 @@ on the page. The emulator does not prove physical WebGPU XR support.
 
 - Left thumbstick: head-relative movement (1.4 metres/second).
 - Right thumbstick: 30-degree snap turns, returning to centre between turns.
-- Right controller: visible cyan 1.5-metre stick. Its tip applies a small
-  spherical force to nearby occupied fluid cells. Both rotating and moving
+- Right controller: visible cyan 1.5-metre stick. Its full length applies a
+  capsule-shaped force to nearby occupied fluid cells. Both rotating and moving
   the controller stir the fluid. The line is an overlay, visible through water.
 - Lost tracking clears force; locomotion does not inject artificial force.
+- The default pond is 4.8 metres wide (12.5 simulation units per metre).
+- Ground is a world-space grid plane; the skybox ignores camera translation.
 
 Checks: `npm test`, `npm run typecheck`, `npm run build`.
 Physical checks: enter/exit/re-enter VR, inspect both eyes, move/turn, stir with
-the tip submerged, then stop moving and disconnect the right controller.
+the middle of the stick submerged, then stop moving and disconnect the right controller.
 Confirm water continues simulating when the desktop page is not visible.
 
 Setup verification on 2026-11-02: unit test, typecheck and production build
-pass. No Quest was connected. Managed Chromium installation failed with
-ENOSPC (no space left on device); free disk space before retrying installation.
+pass. No Quest was connected. Chromium installation succeeded after freeing
+disk space. Browser smoke testing uses the locally available WebGPU-capable
+Chromium via CHROMIUM_EXECUTABLE when the newer headless browser lacks an adapter.

@@ -6,10 +6,13 @@ import gaussian from './gaussian.wgsl'
 import depthMap from './depthMap.wgsl'
 import sphere from './sphere.wgsl'
 import bgColor from './bgColor.wgsl'
+import ground from './ground.wgsl'
 import densityRaymarch from './densityRaymarch.wgsl'
 
 
 export class FluidRenderer {
+    groundPipeline: GPURenderPipeline
+    groundBindGroup: GPUBindGroup
     depthFilter1DPipeline: GPURenderPipeline
     depthFilter2DPipeline: GPURenderPipeline
     thicknessMapPipeline: GPURenderPipeline
@@ -75,6 +78,7 @@ export class FluidRenderer {
             // addressModeV: "repeat",
             magFilter: 'linear', 
             minFilter: 'linear'
+            , mipmapFilter: 'linear'
         });
 
         const vertexModule = device.createShaderModule({ code: fullScreen })
@@ -85,6 +89,16 @@ export class FluidRenderer {
         const thicknessMapModule = device.createShaderModule({ code: thicknessMap })
         const thicknessFilterModule = device.createShaderModule({ code: gaussian })
         const bgColorModule = device.createShaderModule({ code: bgColor })
+        const groundModule = device.createShaderModule({ code: ground })
+        this.groundPipeline = device.createRenderPipeline({
+            layout: 'auto', vertex: {module: groundModule},
+            fragment: {module: groundModule, targets: [{format: presentationFormat}]},
+            primitive: {topology: 'triangle-list'},
+        })
+        this.groundBindGroup = device.createBindGroup({
+            layout: this.groundPipeline.getBindGroupLayout(0),
+            entries: [{binding: 0, resource: {buffer: renderUniformBuffer}}],
+        })
         const densityRaymarchModule = device.createShaderModule({ code: densityRaymarch })
 
         // pipelines
@@ -674,6 +688,9 @@ export class FluidRenderer {
             bgColorPassEncoder.setBindGroup(0, this.bgColorBindGroup)
             bgColorPassEncoder.setPipeline(this.bgColorPipeline)
             bgColorPassEncoder.draw(6)
+            bgColorPassEncoder.setPipeline(this.groundPipeline)
+            bgColorPassEncoder.setBindGroup(0, this.groundBindGroup)
+            bgColorPassEncoder.draw(6)
             bgColorPassEncoder.end()
 
             const fluidPassEncoder = commandEncoder.beginRenderPass(fluidPassDescriptor)
@@ -686,6 +703,9 @@ export class FluidRenderer {
             const bgColorPassEncoder = commandEncoder.beginRenderPass(bgColorPassDescriptor)
             bgColorPassEncoder.setBindGroup(0, this.bgColorBindGroup)
             bgColorPassEncoder.setPipeline(this.bgColorPipeline)
+            bgColorPassEncoder.draw(6)
+            bgColorPassEncoder.setPipeline(this.groundPipeline)
+            bgColorPassEncoder.setBindGroup(0, this.groundBindGroup)
             bgColorPassEncoder.draw(6)
             bgColorPassEncoder.end()
             const spherePassEncoder = commandEncoder.beginRenderPass(spherePassDescriptor)
