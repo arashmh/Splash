@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 test('XR frame loop, Quest axes, stick rotation, tracking loss and teardown', async () => {
-  const bundle = await build({entryPoints:['xr.ts'], bundle:true, write:false, format:'esm', platform:'node'})
-  const {startWebGPUXR, xrInput} = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`)
+  const bundle = await build({stdin:{contents:"export * from './xr'; export {renderUniformsViews} from './camera'",resolveDir:process.cwd(),loader:'ts'}, bundle:true, write:false, format:'esm', platform:'node'})
+  const {startWebGPUXR, xrInput, renderUniformsViews} = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`)
   const identity = new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1])
   let callback, onEnd, steps=0, renders=0, ended=false
   const left={handedness:'left',gamepad:{axes:[0,0,0,0]}}
@@ -18,6 +18,10 @@ test('XR frame loop, Quest axes, stick rotation, tracking loss and teardown', as
   const frame={getViewerPose(){return {views:[{projectionMatrix:identity,transform:{inverse:{matrix:identity}}}]}},getPose(){return tracked?{transform:{matrix:ray}}:null}}
   await startWebGPUXR({},'rgba8unorm',()=>renders++,()=>steps++,()=>[60,50,60])
   callback(1000,frame)
+  const camera = renderUniformsViews.invViewMatrix
+  assert.equal(Math.hypot(camera[0],camera[1],camera[2]),1,'XR camera must not scale particle radii')
+  assert.equal(camera[12],30,'camera translation remains in simulation units')
+  assert.equal(camera[14],90,'spawn remains outside tank')
   const initial=xrInput.position[2]
   left.gamepad.axes[3]=-1
   callback(1020,frame)

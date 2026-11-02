@@ -68,6 +68,12 @@ export async function startWebGPUXR(device: GPUDevice, format: GPUTextureFormat,
         renderUniformsViews.projectionMatrix.set(projection)
         renderUniformsViews.invProjectionMatrix.set(mat4.inverse(projection))
         const world = mat4.multiply(rig, mat4.inverse(view.transform.inverse.matrix))
+        // Keep the camera basis rigid. Only physical translations are scaled
+        // into simulation units; particle radii and filter depth use those same
+        // units. A scaled camera basis makes every particle 25x too large.
+        for (let column = 0; column < 3; column++) {
+          for (let row = 0; row < 3; row++) world[column * 4 + row] /= 25
+        }
         renderUniformsViews.invViewMatrix.set(world)
         renderUniformsViews.viewMatrix.set(mat4.inverse(world))
         renderEye(view, sub.colorTexture.createView(sub.getViewDescriptor()), sub.viewport)

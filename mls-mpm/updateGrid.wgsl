@@ -60,7 +60,12 @@ fn updateGrid(@builtin(global_invocation_id) id: vec3<u32>) {
     if (id.x < arrayLength(&cells)) { // TODO : 変える
         let uv: vec2f = mouseInfo.mouseCoord;
         let iuv = uv * mouseInfo.screenSize;
-        let depth: f32 = abs(textureLoad(depthTexture, vec2u(iuv), 0).x);
+        // XR interaction is world-space: avoid a screen-depth lookup for every
+        // grid cell (and avoid reading an unrelated previous-eye depth map).
+        var depth = 1e6;
+        if (mouseInfo.xrEnabled == 0.0) {
+            depth = abs(textureLoad(depthTexture, vec2u(iuv), 0).x);
+        }
         var mouseCellIndex: u32 = 1000000000; // 適当な invalid 値
         var cellSquareDistToMouse: f32 = 1e9;
         var forceDir = vec3f(0.);
