@@ -6,11 +6,21 @@ export const xrInput = {
   active: false,
   pointer: [0.5, 0.5] as number[],
   velocity: [0, 0, 0, 0] as number[],
+  rayOrigin: [0, 1.2, 0] as number[],
+  rayDirection: [0, 0, -1] as number[],
 }
 
 export async function startWebGPUXR(device: GPUDevice, renderEye: XREyeRenderer) {
-  if (!navigator.xr || !navigator.gpu || !('XRGPUBinding' in globalThis)) {
-    throw new Error('This browser does not expose WebGPU WebXR (Quest currently falls back to desktop mode).')
+  if (!navigator.xr || !navigator.gpu) {
+    throw new Error('WebXR or WebGPU is not available in this browser.')
+  }
+  if (!('XRGPUBinding' in globalThis)) {
+    throw new Error('This browser does not expose the WebGPU WebXR binding. Enable WebGPU WebXR in Quest Browser experimental flags.')
+  }
+
+  const supported = await navigator.xr.isSessionSupported?.('immersive-vr')
+  if (supported === false) {
+    throw new Error('Immersive VR is not supported by this headset/browser.')
   }
 
   const session = await navigator.xr.requestSession('immersive-vr', {
@@ -23,8 +33,6 @@ export async function startWebGPUXR(device: GPUDevice, renderEye: XREyeRenderer)
   })
   session.updateRenderState({ layers: [layer] })
   let referenceSpace = await session.requestReferenceSpace('local-floor')
-  let locomotionX = 0
-  let locomotionZ = 0
   let previousGrip: { x: number; y: number; z: number } | null = null
   xrInput.active = true
   session.addEventListener('end', () => { xrInput.active = false })
@@ -35,13 +43,23 @@ export async function startWebGPUXR(device: GPUDevice, renderEye: XREyeRenderer)
       for (const source of session.inputSources) {
         const axes = source.gamepad?.axes ?? []
         if (source.handedness === 'left' && axes.length >= 2) {
-          locomotionX += axes[0] * 0.025
-          locomotionZ += axes[1] * 0.025
-          referenceSpace = referenceSpace.getOffsetReferenceSpace(new (globalThis as any).XRRigidTransform({ x: -axes[0] * 0.025, z: -axes[1] * 0.025 }))
+          const deadZone = 0.15
+          const x = Math.abs(axes[0]) > deadZone ? axes[0] : 0
+          const z = Math.abs(axes[1]) > deadZone ? axes[1] : 0
+          referenceSpace = referenceSpace.getOffsetReferenceSpace(new (globalThis as any).XRRigidTransform({ x: -x * 0.025, z: -z * 0.025 }))
         }
-        const grip = source.gripSpace && frame.getPose(source.gripSpace, referenceSpace)
-        if (source.handedness === 'right' && grip) {
-          const p = grip.transform.position
+
+        const targetRay = source.targetRaySpace && frame.getPose(source.targetRaySpace, referenceSpace)
+        if (source.handedness === 'right' && targetRay) {
+          const transform = targetRay.transform
+          const p = transform.position
+          const m = transform.matrix
+          const dx = -m[8], dy = -m[9], dz = -m[10]
+          xrInput.rayOrigin[0] = p.x; xrInput.rayOrigin[1] = p.y; xrInput.rayOrigin[2] = p.z
+          xrInput.rayDirection[0] = dx; xrInput.rayDirection[1] = dy; xrInput.rayDirection[2] = dz
+          const rayLength = Math.max(0.15, Math.min(2.5, (1.15 - p.y) / Math.max(0.05, -dy)))
+          const hitX = p.x + dx * rayLength
+          const hitY = p.y + dy * rayLength
           if (previousGrip) {
             xrInput.velocity[0] = (p.x - previousGrip.x) * 8
             xrInput.velocity[1] = (p.y - previousGrip.y) * 8
@@ -49,8 +67,8 @@ export async function startWebGPUXR(device: GPUDevice, renderEye: XREyeRenderer)
             xrInput.velocity[3] = 0
           }
           previousGrip = { x: p.x, y: p.y, z: p.z }
-          xrInput.pointer[0] = Math.max(0, Math.min(1, 0.5 + p.x * 0.15))
-          xrInput.pointer[1] = Math.max(0, Math.min(1, 0.5 - (p.y - 1.2) * 0.15))
+          xrInput.pointer[0] = Math.max(0, Math.min(1, 0.5 + hitX * 0.15))
+          xrInput.pointer[1] = Math.max(0, Math.min(1, 0.5 - (hitY - 1.2) * 0.15))
         }
       }
       for (const view of pose.views) {

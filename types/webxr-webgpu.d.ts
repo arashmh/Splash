@@ -11,10 +11,10 @@ interface XRFrame { getViewerPose(space: XRReferenceSpace): { views: XRView[] } 
 interface XRReferenceSpace { getOffsetReferenceSpace(transform: XRRigidTransform): XRReferenceSpace }
 interface XRSpace {}
 interface XRRigidTransform { new (init?: { x?: number; y?: number; z?: number }): XRRigidTransform }
-interface XRGripPose { transform: { position: { x: number; y: number; z: number } } }
-interface XRInputSource { handedness: string; gamepad?: Gamepad; gripSpace?: XRSpace }
+interface XRGripPose { transform: { position: { x: number; y: number; z: number }; matrix: Float32Array } }
+interface XRInputSource { handedness: string; gamepad?: Gamepad; gripSpace?: XRSpace; targetRaySpace?: XRSpace }
 interface XRSession { updateRenderState(state: { layers: XRProjectionLayer[] }): void; requestReferenceSpace(type: string): Promise<XRReferenceSpace>; requestAnimationFrame(cb: (time: number, frame: XRFrame) => void): number; inputSources: XRInputSource[]; addEventListener(type: string, cb: () => void): void }
-interface XRSystem { requestSession(mode: string, init?: XRSessionInit): Promise<XRSession> }
+interface XRSystem { isSessionSupported?(mode: string): Promise<boolean>; requestSession(mode: string, init?: XRSessionInit): Promise<XRSession> }
 interface XRSubImage {}
 interface XRProjectionLayer {}
 

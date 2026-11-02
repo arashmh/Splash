@@ -16,7 +16,10 @@ async function init() {
 		throw new Error()
 	}
 
-	const adapter = await navigator.gpu.requestAdapter()
+	// A device created from a regular WebGPU adapter cannot be submitted to an
+	// immersive WebXR session on Quest. Ask the browser for the XR-compatible
+	// adapter up front; this is required by the WebGPU/WebXR integration.
+	const adapter = await navigator.gpu.requestAdapter({ xrCompatible: true })
 
 	if (!adapter) {
 		alert("Adapter is not available.");
