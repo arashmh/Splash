@@ -484,7 +484,7 @@ export class FluidRenderer {
 
     execute(context: GPUCanvasContext | null, commandEncoder: GPUCommandEncoder,
         numParticles: number, sphereRenderFl: boolean, diffuseColor: number[], colorDensity: number
-        , targetView?: GPUTextureView
+        , targetView?: GPUTextureView, viewport?: XRViewport
     ) 
     {
         const diffuseColorArray = new Float32Array(diffuseColor)
@@ -677,6 +677,7 @@ export class FluidRenderer {
             bgColorPassEncoder.end()
 
             const fluidPassEncoder = commandEncoder.beginRenderPass(fluidPassDescriptor)
+            if (viewport) fluidPassEncoder.setViewport(viewport.x, viewport.y, viewport.width, viewport.height, 0, 1)
             fluidPassEncoder.setBindGroup(0, this.fluidBindGroup)
             fluidPassEncoder.setPipeline(this.fluidPipeline)
             fluidPassEncoder.draw(6)
@@ -694,6 +695,7 @@ export class FluidRenderer {
             spherePassEncoder.end()
 
             const densityRaymarchPassEncoder = commandEncoder.beginRenderPass(densityRaymarchPassDescriptor)
+            if (viewport) densityRaymarchPassEncoder.setViewport(viewport.x, viewport.y, viewport.width, viewport.height, 0, 1)
             densityRaymarchPassEncoder.setBindGroup(0, this.densityRaymarchBindGroup)
             densityRaymarchPassEncoder.setPipeline(this.densityRaymarchPipeline)
             densityRaymarchPassEncoder.draw(6)

@@ -17,6 +17,9 @@ struct MouseInfo {
     mouseCoord : vec2f, 
     mouseVel : vec2f, 
     mouseRadius: f32, 
+    xrEnabled: f32,
+    xrPosition: vec4f,
+    xrVelocity: vec4f,
 }
 
 override fixedPointMultiplier: f32; 
@@ -62,7 +65,13 @@ fn updateGrid(@builtin(global_invocation_id) id: vec3<u32>) {
         var cellSquareDistToMouse: f32 = 1e9;
         var forceDir = vec3f(0.);
 
-        if (depth < 1e4) {
+        if (mouseInfo.xrEnabled > 0.5) {
+            let cellPos = vec3f(f32(id.x / u32(initBoxSize.z) / u32(initBoxSize.y)),
+                f32((id.x / u32(initBoxSize.z)) % u32(initBoxSize.y)), f32(id.x % u32(initBoxSize.z)));
+            let diff = mouseInfo.xrPosition.xyz - cellPos;
+            cellSquareDistToMouse = dot(diff, diff);
+            forceDir = mouseInfo.xrVelocity.xyz;
+        } else if (mouseInfo.xrEnabled == 0.0 && depth < 1e4) {
             let mouseViewPos = getViewPosFromTexCoord(uv, iuv);
             let mouseWorldPos = uniforms.invViewMatrix * vec4f(mouseViewPos, 1.); // 位置なので 1
             let mouseCellPos: vec3i = vec3i(floor(mouseWorldPos).xyz);

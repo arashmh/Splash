@@ -4,6 +4,7 @@ import { renderUniformsViews, renderUniformsValues } from './camera'
 import { FluidRenderer } from './render/fluidRender'
 import GUI from 'lil-gui';
 import { startWebGPUXR, xrInput } from './xr'
+import { XRStick } from './render/xrStick'
 
 /// <reference types="@webgpu/types" />
 
@@ -27,6 +28,11 @@ async function init() {
 	}
 
 	const device = await adapter.requestDevice()
+	device.addEventListener('uncapturederror', (event) => {
+		const message = `GPU error: ${(event as GPUUncapturedErrorEvent).error.message}`
+		console.error(message)
+		document.getElementById('error-reason')!.textContent = message
+	})
 	// const device = await adapter.requestDevice({
 	// 	requiredFeatures: ["float32-filterable"],
 	// });
@@ -261,17 +267,23 @@ async function main() {
 	console.log("simulator initialization done")
 
 	const xrButton = document.getElementById('enter-vr') as HTMLButtonElement
+	const stick = new XRStick(device, presentationFormat)
 	if (navigator.xr) {
 		xrButton.hidden = false
 		xrButton.onclick = async () => {
 			try {
 				xrButton.disabled = true
-				await startWebGPUXR(device, (_view, target) => {
+				const session = await startWebGPUXR(device, presentationFormat, (_view, target, viewport) => {
 					const xrEncoder = device.createCommandEncoder()
 					device.queue.writeBuffer(renderUniformBuffer, 0, renderUniformsValues)
 					mlsmpmRenderer.execute(null, xrEncoder, mlsmpmSimulator.numParticles, sphereRenderFl,
-						[guiParams.r / 255, guiParams.g / 255, guiParams.b / 255], guiParams.colorDensity, target)
+						[guiParams.r / 255, guiParams.g / 255, guiParams.b / 255], guiParams.colorDensity, target, viewport)
+					stick.draw(xrEncoder, target, viewport)
 					device.queue.submit([xrEncoder.finish()])
+				}, () => frame(true), () => realBoxSize)
+				session.addEventListener('end', () => {
+					xrButton.disabled = false
+					camera.reset(simulationParam.initDistance, [initBoxSize[0]/2, simulationParam.cameraTargetY, initBoxSize[2]/2], mlsmpmFov, mlsmpmZoomRate)
 				})
 			} catch (error) {
 				console.warn(error)
@@ -308,7 +320,11 @@ async function main() {
 	let prevClosingSpeed = 0.
 
 	
-	async function frame() {
+	function frame(fromXR = false) {
+		if (!fromXR) {
+			requestAnimationFrame(() => frame())
+			if (xrInput.active) return
+		}
 		const selectedValue = particleCountTexts.indexOf(guiParams.numParticles);
 		if (guiParams.running && Number(selectedValue) != paramsIdx) {
 			paramsIdx = Number(selectedValue)
@@ -350,13 +366,16 @@ async function main() {
 		const commandEncoder = device.createCommandEncoder()
 
 		let maxDt = 0.4;
+		mlsmpmSimulator.mouseInfoViews.xrEnabled[0] = xrInput.active ? (xrInput.tracked ? 1 : -1) : 0
+		mlsmpmSimulator.mouseInfoViews.xrPosition.set(xrInput.position)
+		mlsmpmSimulator.mouseInfoViews.xrVelocity.set(xrInput.velocity)
 		mlsmpmSimulator.execute(commandEncoder,
-			xrInput.active ? xrInput.pointer : [camera.currentHoverX / canvas.clientWidth, camera.currentHoverY / canvas.clientHeight],
-			xrInput.active ? xrInput.velocity : camera.calcMouseVelocity(), simulationParam.mouseRadius, sphereRenderFl, maxDt * guiParams.speed, guiParams.running,
+			[camera.currentHoverX / canvas.clientWidth, camera.currentHoverY / canvas.clientHeight],
+			xrInput.active ? [0,0] : camera.calcMouseVelocity(), xrInput.active ? 5 : simulationParam.mouseRadius, sphereRenderFl, maxDt * guiParams.speed, guiParams.running,
 			densityGridSize
 		)	
 		let normalizedDiffuseColor = [guiParams.r / 255, guiParams.g / 255, guiParams.b / 255];
-		mlsmpmRenderer.execute(context, commandEncoder, mlsmpmSimulator.numParticles, sphereRenderFl, normalizedDiffuseColor, 
+		if (!fromXR) mlsmpmRenderer.execute(context, commandEncoder, mlsmpmSimulator.numParticles, sphereRenderFl, normalizedDiffuseColor,
 			guiParams.colorDensity)
 
 		device.queue.submit([commandEncoder.finish()])
@@ -388,9 +407,8 @@ async function main() {
 			camera.stepAngle();
 		}
 
-		requestAnimationFrame(frame)
 	} 
-	requestAnimationFrame(frame)
+	requestAnimationFrame(() => frame())
 }
 
 main()

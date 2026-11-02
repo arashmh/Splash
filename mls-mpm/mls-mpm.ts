@@ -56,12 +56,15 @@ export class MLSMPMSimulator {
 
     spawned: boolean
 
-    mouseInfoValues = new ArrayBuffer(32)
+    mouseInfoValues = new ArrayBuffer(64)
     mouseInfoViews = {
         screenSize: new Float32Array(this.mouseInfoValues, 0, 2),
         mouseCoord: new Float32Array(this.mouseInfoValues, 8, 2),
         mouseVel: new Float32Array(this.mouseInfoValues, 16, 2),
         mouseRadius: new Float32Array(this.mouseInfoValues, 24, 1),
+        xrEnabled: new Float32Array(this.mouseInfoValues, 28, 1),
+        xrPosition: new Float32Array(this.mouseInfoValues, 32, 4),
+        xrVelocity: new Float32Array(this.mouseInfoValues, 48, 4),
     };
 
     restDensity: number

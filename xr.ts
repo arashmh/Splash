@@ -1,84 +1,79 @@
+import { mat4 } from 'wgpu-matrix'
 import { renderUniformsViews } from './camera'
 
-export type XREyeRenderer = (view: XRView, target: GPUTextureView, viewport: XRViewport) => void
+export const xrInput = { active: false, tracked: false, position: [0,0,0,0], velocity: [0,0,0,0], origin: [0,0,0] }
 
-export const xrInput = {
-  active: false,
-  pointer: [0.5, 0.5] as number[],
-  velocity: [0, 0, 0, 0] as number[],
-  rayOrigin: [0, 1.2, 0] as number[],
-  rayDirection: [0, 0, -1] as number[],
-}
-
-export async function startWebGPUXR(device: GPUDevice, renderEye: XREyeRenderer) {
-  if (!navigator.xr || !navigator.gpu) {
-    throw new Error('WebXR or WebGPU is not available in this browser.')
-  }
-  if (!('XRGPUBinding' in globalThis)) {
-    throw new Error('XRGPUBinding is missing. In Quest Browser 152.1, enable "WebXR Experiments" at chrome://flags and restart the browser. WebGPU flags alone do not enable this binding.')
-  }
-
-  // Request directly from the button gesture, without an asynchronous probe
-  // that can consume the transient user activation required for immersive VR.
-  const session = await navigator.xr.requestSession('immersive-vr', {
-    requiredFeatures: ['webgpu'],
-    optionalFeatures: ['local-floor'],
-  })
-  const binding = new (globalThis as any).XRGPUBinding(session, device) as XRGPUBinding
-  const layer = binding.createProjectionLayer({
-    colorFormat: binding.getPreferredColorFormat(),
-    scaleFactor: 0.8,
-  })
-  session.updateRenderState({ layers: [layer] })
-  let referenceSpace = await session.requestReferenceSpace('local-floor')
-    .catch(() => session.requestReferenceSpace('local'))
-  let previousGrip: { x: number; y: number; z: number } | null = null
-  xrInput.active = true
-  session.addEventListener('end', () => { xrInput.active = false })
-
-  const onFrame = (_time: number, frame: XRFrame) => {
-    const pose = frame.getViewerPose(referenceSpace)
-    if (pose) {
+export async function startWebGPUXR(device: GPUDevice, format: GPUTextureFormat,
+  renderEye: (view: XRView, target: GPUTextureView, viewport: XRViewport) => void,
+  step: () => void, box: () => number[]) {
+  if (!navigator.xr || !navigator.gpu) throw new Error('WebXR/WebGPU requires a supported browser and HTTPS.')
+  if (!('XRGPUBinding' in globalThis)) throw new Error('XRGPUBinding is missing. Enable WebXR Experiments in chrome://flags and restart Quest Browser.')
+  const session = await navigator.xr.requestSession('immersive-vr', { requiredFeatures: ['webgpu'], optionalFeatures: ['local-floor'] })
+  try {
+    const binding = new (globalThis as any).XRGPUBinding(session, device) as XRGPUBinding
+    const layer = binding.createProjectionLayer({ colorFormat: format, scaleFactor: 0.8 })
+    session.updateRenderState({ layers: [layer] })
+    let seated = false
+    const space = await session.requestReferenceSpace('local-floor').catch(() => { seated = true; return session.requestReferenceSpace('local') })
+    const size = box(), offset = [size[0]/2, seated ? 40 : 0, size[2]+30]
+    let last = 0, previous: number[] | null = null, yaw = 0, turnReady = true
+    xrInput.active = true
+    session.addEventListener('end', () => { xrInput.active = false; xrInput.tracked = false; xrInput.velocity.fill(0) })
+    const onFrame = (time: number, frame: XRFrame) => {
+      session.requestAnimationFrame(onFrame)
+      const dt = last ? Math.min((time-last)/1000, 0.05) : 0
+      last = time
+      const pose = frame.getViewerPose(space)
+      xrInput.tracked = false; xrInput.velocity.fill(0)
+      if (!pose) { previous = null; return }
+      let moved = false
       for (const source of session.inputSources) {
         const axes = source.gamepad?.axes ?? []
-        if (source.handedness === 'left' && axes.length >= 2) {
-          const deadZone = 0.15
-          const x = Math.abs(axes[0]) > deadZone ? axes[0] : 0
-          const z = Math.abs(axes[1]) > deadZone ? axes[1] : 0
-          referenceSpace = referenceSpace.getOffsetReferenceSpace(new (globalThis as any).XRRigidTransform({ x: -x * 0.025, z: -z * 0.025 }))
+        const ax = axes.length >= 4 ? axes[2] : axes[0] ?? 0
+        const az = axes.length >= 4 ? axes[3] : axes[1] ?? 0
+        if (source.handedness === 'right') {
+          if (Math.abs(ax) < 0.3) turnReady = true
+          if (Math.abs(ax) > 0.7 && turnReady) { yaw -= Math.sign(ax)*Math.PI/6; turnReady = false; moved = true }
         }
-
-        const targetRay = source.targetRaySpace && frame.getPose(source.targetRaySpace, referenceSpace)
-        if (source.handedness === 'right' && targetRay) {
-          const transform = targetRay.transform
-          const p = transform.position
-          const m = transform.matrix
-          const dx = -m[8], dy = -m[9], dz = -m[10]
-          xrInput.rayOrigin[0] = p.x; xrInput.rayOrigin[1] = p.y; xrInput.rayOrigin[2] = p.z
-          xrInput.rayDirection[0] = dx; xrInput.rayDirection[1] = dy; xrInput.rayDirection[2] = dz
-          const rayLength = Math.max(0.15, Math.min(2.5, (1.15 - p.y) / Math.max(0.05, -dy)))
-          const hitX = p.x + dx * rayLength
-          const hitY = p.y + dy * rayLength
-          if (previousGrip) {
-            xrInput.velocity[0] = (p.x - previousGrip.x) * 8
-            xrInput.velocity[1] = (p.y - previousGrip.y) * 8
-            xrInput.velocity[2] = 0
-            xrInput.velocity[3] = 0
-          }
-          previousGrip = { x: p.x, y: p.y, z: p.z }
-          xrInput.pointer[0] = Math.max(0, Math.min(1, 0.5 + hitX * 0.15))
-          xrInput.pointer[1] = Math.max(0, Math.min(1, 0.5 - (hitY - 1.2) * 0.15))
+        if (source.handedness === 'left') {
+          const x = Math.abs(ax)>0.15 ? ax : 0, z = Math.abs(az)>0.15 ? az : 0
+          const head = mat4.inverse(pose.views[0].transform.inverse.matrix)
+          const angle = yaw + Math.atan2(head[8], head[10]), norm = Math.max(1, Math.hypot(x,z))
+          offset[0] += (Math.cos(angle)*x + Math.sin(angle)*z)/norm*dt*35
+          offset[2] += (-Math.sin(angle)*x + Math.cos(angle)*z)/norm*dt*35
+          moved ||= x !== 0 || z !== 0
         }
       }
+      // 25 simulation units per metre, with the player outside the front wall.
+      const rig = mat4.translation(offset)
+      mat4.rotateY(rig, yaw, rig); mat4.scale(rig, [25,25,25], rig)
+      for (const source of session.inputSources) {
+        if (source.handedness !== 'right' || !source.targetRaySpace) continue
+        const ray = frame.getPose(source.targetRaySpace, space)
+        if (!ray) continue
+        const world = mat4.multiply(rig, ray.transform.matrix)
+        for (let i=0; i<3; i++) {
+          xrInput.origin[i] = world[12+i]
+          xrInput.position[i] = world[12+i] - world[8+i]*1.5
+          xrInput.velocity[i] = previous && !moved && dt>0 ? Math.max(-4, Math.min(4, (xrInput.position[i]-previous[i])/dt/72)) : 0
+        }
+        xrInput.tracked = true
+      }
+      previous = xrInput.tracked ? xrInput.position.slice() : null
+      step()
       for (const view of pose.views) {
-        const subImage = binding.getViewSubImage(layer, view)
-        renderUniformsViews.projectionMatrix.set(view.projectionMatrix)
-        renderUniformsViews.viewMatrix.set(view.transform.inverse.matrix)
-        renderEye(view, subImage.colorTexture.createView(subImage.getViewDescriptor()), subImage.viewport)
+        const sub = binding.getViewSubImage(layer, view)
+        const projection = new Float32Array(view.projectionMatrix)
+        // A session with the webgpu feature already supplies [0,1] clip depth.
+        renderUniformsViews.projectionMatrix.set(projection)
+        renderUniformsViews.invProjectionMatrix.set(mat4.inverse(projection))
+        const world = mat4.multiply(rig, mat4.inverse(view.transform.inverse.matrix))
+        renderUniformsViews.invViewMatrix.set(world)
+        renderUniformsViews.viewMatrix.set(mat4.inverse(world))
+        renderEye(view, sub.colorTexture.createView(sub.getViewDescriptor()), sub.viewport)
       }
     }
     session.requestAnimationFrame(onFrame)
-  }
-  session.requestAnimationFrame(onFrame)
-  return session
+    return session
+  } catch (error) { await session.end().catch(() => {}); throw error }
 }
