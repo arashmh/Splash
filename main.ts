@@ -278,15 +278,34 @@ async function main() {
 
 	const xrButton = document.getElementById('enter-vr') as HTMLButtonElement
 	const stick = new XRStick(device, presentationFormat)
+	const stereoResources = new Map<string, {renderer: FluidRenderer; uniforms: GPUBuffer; width: number; height: number}>()
 	if (navigator.xr) {
 		xrButton.hidden = false
 		xrButton.onclick = async () => {
 			try {
 				xrButton.disabled = true
-				const session = await startWebGPUXR(device, presentationFormat, (_view, target, viewport) => {
+				const session = await startWebGPUXR(device, presentationFormat, (view, target, viewport) => {
+					const key = view.eye
+					let eye = stereoResources.get(key)
+					if (!eye) {
+						// Keep the native eye aspect ratio throughout every offscreen pass.
+						const scale = Math.min(1, 800 / Math.max(viewport.width, viewport.height))
+						const width = Math.max(2, Math.round(viewport.width * scale / 2) * 2)
+						const height = Math.max(2, Math.round(viewport.height * scale / 2) * 2)
+						const eyeCanvas = document.createElement('canvas')
+						eyeCanvas.width = width; eyeCanvas.height = height
+						const uniforms = device.createBuffer({size: renderUniformsValues.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST})
+						const depth = device.createTexture({size: [width,height], format: 'r32float', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING})
+						const renderer = new FluidRenderer(uniforms, posvelBuffer, densityGridSizeBuffer, initBoxSizeBuffer,
+							device, depth.createView(), cubemapTextureView, densityGridTextureView, eyeCanvas,
+							presentationFormat, mlsmpmRadius, mlsmpmFov, fixedPointMultiplier)
+						eye = {renderer, uniforms, width, height}
+						stereoResources.set(key, eye)
+					}
 					const xrEncoder = device.createCommandEncoder()
-					device.queue.writeBuffer(renderUniformBuffer, 0, renderUniformsValues)
-					mlsmpmRenderer.execute(null, xrEncoder, mlsmpmSimulator.numParticles, sphereRenderFl,
+					renderUniformsViews.texelSize.set([1 / eye.width, 1 / eye.height])
+					device.queue.writeBuffer(eye.uniforms, 0, renderUniformsValues)
+					eye.renderer.execute(null, xrEncoder, mlsmpmSimulator.numParticles, sphereRenderFl,
 						[guiParams.r / 255, guiParams.g / 255, guiParams.b / 255], guiParams.colorDensity, target, viewport)
 					stick.draw(xrEncoder, target, viewport)
 					device.queue.submit([xrEncoder.finish()])

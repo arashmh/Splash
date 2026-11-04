@@ -30,6 +30,14 @@ development-only adapter in dev/iwsdk-bridge.ts supplies the runtime readiness
 contract and delegates XR commands to IWER. XR status, device-state inspection,
 and browser snapshots now succeed, including after reload. This does not add
 native scene/ECS capabilities or prove physical Quest WebGPU XR support.
+
+Stereo rendering uses separate per-eye uniforms and intermediate textures,
+with each eye's native aspect ratio. Linear-depth reconstruction unprojects a
+ray through the complete inverse projection. The browser GPU motion test checks
+fixed world points with asymmetric projections, translation, yaw and roll.
+The IWSDK emulator on this machine does not expose XRGPUBinding: its command
+bridge works, but pressing Enter WebGPU VR cannot start this WebGPU session.
+Do not report an emulated immersive test as passed without an active session.
 Physical checks: enter/exit/re-enter VR, inspect both eyes, move/turn, stir with
 the middle of the stick submerged, then stop moving and disconnect the right controller.
 Confirm water continues simulating when the desktop page is not visible.

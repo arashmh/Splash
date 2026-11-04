@@ -22,13 +22,11 @@ struct FragmentInput {
 }
 
 fn computeViewPosFromUVDepth(texCoord: vec2f, depth: f32) -> vec3f {
-    var ndc: vec4f = vec4f(texCoord.x * 2.0 - 1.0, 1.0 - 2.0 * texCoord.y, 0.0, 1.0);
-    ndc.z = -uniforms.projectionMatrix[2].z + uniforms.projectionMatrix[3].z / depth;
-    ndc.w = 1.0;
-
-    var eye_pos: vec4f = uniforms.invProjectionMatrix * ndc;
-
-    return eye_pos.xyz / eye_pos.w;
+    let ray = uniforms.invProjectionMatrix * vec4f(texCoord.x * 2.0 - 1.0, 1.0 - texCoord.y * 2.0, 0.5, 1.0);
+    // Linear eye depth is -view.z. Unproject a ray, then scale along it.
+    // This supports asymmetric XR frusta without assuming a projection layout.
+    let direction = ray.xyz / ray.w;
+    return direction * (depth / max(-direction.z, 1e-6));
 }
 
 fn getViewPosFromTexCoord(texCoord: vec2f, iuv: vec2f) -> vec3f {
@@ -59,14 +57,14 @@ fn fs(input: FragmentInput) -> @location(0) vec4f {
 
     if (depth >= 1e4) {
         let bgColor: vec3f = textureSampleLevel(bgTexture, textureSampler, input.uv, 0.0).rgb;
-        return vec4f(bgColor, 0.);
+        return vec4f(bgColor, 1.);
     }
 
     let surfacePosView = computeViewPosFromUVDepth(input.uv, depth);
     let surfacePosWorld = (uniforms.invViewMatrix * vec4f(surfacePosView, 1.0)).xyz;
     if (surfacePosWorld.y < 2.0) {
         let bgColor: vec3f = textureSampleLevel(bgTexture, textureSampler, input.uv, 0.0).rgb;
-        return vec4f(bgColor, 0.);
+        return vec4f(bgColor, 1.);
     }
     var ddx: vec3f = getViewPosFromTexCoord(input.uv + vec2f(uniforms.texelSize.x, 0.), input.iuv + vec2f(1.0, 0.0)) - surfacePosView; 
     var ddy: vec3f = getViewPosFromTexCoord(input.uv + vec2f(0., uniforms.texelSize.y), input.iuv + vec2f(0.0, 1.0)) - surfacePosView; 

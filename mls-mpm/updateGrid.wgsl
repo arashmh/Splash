@@ -43,13 +43,11 @@ fn decodeFixedPoint(fixedPoint: i32) -> f32 {
 }
 
 fn computeViewPosFromUVDepth(tex_coord: vec2f, depth: f32) -> vec3f {
-    var ndc: vec4f = vec4f(tex_coord.x * 2.0 - 1.0, 1.0 - 2.0 * tex_coord.y, 0.0, 1.0);
-    ndc.z = -uniforms.projectionMatrix[2].z + uniforms.projectionMatrix[3].z / depth;
-    ndc.w = 1.0;
-
-    var eye_pos: vec4f = uniforms.invProjectionMatrix * ndc;
-
-    return eye_pos.xyz / eye_pos.w;
+    let ray = uniforms.invProjectionMatrix * vec4f(tex_coord.x * 2.0 - 1.0, 1.0 - tex_coord.y * 2.0, 0.5, 1.0);
+    // Linear eye depth is -view.z. Unproject a ray, then scale along it.
+    // This supports asymmetric XR frusta without assuming a projection layout.
+    let direction = ray.xyz / ray.w;
+    return direction * (depth / max(-direction.z, 1e-6));
 }
 
 fn getViewPosFromTexCoord(tex_coord: vec2f, iuv: vec2f) -> vec3f {

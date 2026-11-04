@@ -6,7 +6,7 @@ interface XRGPUSubImage extends XRSubImage {
 }
 
 interface XRViewport { x: number; y: number; width: number; height: number }
-interface XRView { projectionMatrix: Float32Array; transform: { inverse: { matrix: Float32Array } } }
+interface XRView { eye: 'left' | 'right' | 'none'; projectionMatrix: Float32Array; transform: { inverse: { matrix: Float32Array } } }
 interface XRFrame { getViewerPose(space: XRReferenceSpace): { views: XRView[] } | null; getPose(space: XRSpace, baseSpace: XRReferenceSpace): XRGripPose | null }
 interface XRReferenceSpace { getOffsetReferenceSpace(transform: XRRigidTransform): XRReferenceSpace }
 interface XRSpace {}
