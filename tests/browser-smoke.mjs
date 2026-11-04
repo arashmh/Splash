@@ -1,4 +1,5 @@
 import { chromium } from 'playwright'
+import { checkStereoAtlas } from './stereo-atlas.mjs'
 const browser = await chromium.launch({headless:true,
   ...(process.env.CHROMIUM_EXECUTABLE ? {executablePath:process.env.CHROMIUM_EXECUTABLE} : {}),
   args:['--enable-unsafe-webgpu']})
@@ -10,6 +11,7 @@ try {
   page.on('dialog',async d=>{errors.push(d.message());await d.dismiss()})
   await page.goto(process.env.SPLASH_URL ?? 'https://localhost:5173/')
   await page.waitForTimeout(8000)
+  await checkStereoAtlas(page)
   // Exercise the actual compute shader: the middle of the shaft must stir,
   // even when it is far from both endpoints; cells off the shaft stay still.
   await page.evaluate(async () => {

@@ -15,12 +15,23 @@ test('XR frame loop, Quest axes, stick rotation, tracking loss and teardown', as
   globalThis.XRGPUBinding=class {createProjectionLayer(){return {}} getViewSubImage(){return {colorTexture:{createView(){return {}}},getViewDescriptor(){return {}},viewport:{x:0,y:0,width:100,height:100}}}}
   const ray=new Float32Array(identity); ray[13]=1.4
   let tracked=true
-  const frame={getViewerPose(){return {views:[{projectionMatrix:identity,transform:{inverse:{matrix:identity}}}]}},getPose(){return tracked?{transform:{matrix:ray}}:null}}
-  await startWebGPUXR({},'rgba8unorm',()=>renders++,()=>steps++,()=>[60,50,60])
+  const leftView=new Float32Array(identity), rightView=new Float32Array(identity)
+  leftView[12]=0.032; rightView[12]=-0.032
+  const leftProjection=new Float32Array(identity), rightProjection=new Float32Array(identity)
+  leftProjection[8]=0.12; rightProjection[8]=-0.12
+  const captures=[]
+  const frame={getViewerPose(){return {views:[
+    {projectionMatrix:leftProjection,transform:{inverse:{matrix:leftView}}},
+    {projectionMatrix:rightProjection,transform:{inverse:{matrix:rightView}}},
+  ]}},getPose(){return tracked?{transform:{matrix:ray}}:null}}
+  await startWebGPUXR({},'rgba8unorm',()=>{
+    renders++; captures.push({x:renderUniformsViews.invViewMatrix[12],projection:renderUniformsViews.projectionMatrix[8]})
+  },()=>steps++,()=>[60,50,60])
   callback(1000,frame)
   const camera = renderUniformsViews.invViewMatrix
   assert.equal(Math.hypot(camera[0],camera[1],camera[2]),1,'XR camera must not scale particle radii')
-  assert.equal(camera[12],30,'camera translation remains in simulation units')
+  assert.ok(Math.abs(captures[1].x-captures[0].x-0.8)<1e-4,'both eyes preserve 64mm physical IPD')
+  assert.ok(captures[0].projection>0 && captures[1].projection<0,'asymmetric eye projections remain distinct')
   assert.equal(camera[14],75,'spawn remains 1.2 metres outside the larger tank')
   const initial=xrInput.position[2]
   left.gamepad.axes[3]=-1
@@ -32,7 +43,7 @@ test('XR frame loop, Quest axes, stick rotation, tracking loss and teardown', as
   assert.notEqual(xrInput.velocity[0],0,'controller rotation moves the stick tip')
   tracked=false; callback(1060,frame)
   assert.equal(xrInput.tracked,false); assert.deepEqual(xrInput.velocity,[0,0,0,0])
-  assert.equal(steps,4); assert.equal(renders,4)
+  assert.equal(steps,4); assert.equal(renders,8)
   await session.end(); assert.equal(xrInput.active,false)
   globalThis.XRGPUBinding=class {constructor(){throw new Error('binding failure')}}
   ended=false

@@ -21,6 +21,11 @@ on the page. The emulator does not prove physical WebGPU XR support.
 - Ground is a world-space grid plane; the skybox ignores camera translation.
 
 Checks: `npm test`, `npm run typecheck`, `npm run build`.
+`node tests/browser-smoke.mjs` also reads back a shared stereo GPU attachment
+after both eye draws in fluid and particle modes, checking that neither eye
+clears or writes into the other's region. The XR test checks distinct asymmetric
+projections and scaled 64mm eye separation. On 2026-11-04 these checks passed;
+IWSDK logs confirmed app startup, but XR commands returned target_not_ready.
 Physical checks: enter/exit/re-enter VR, inspect both eyes, move/turn, stir with
 the middle of the stick submerged, then stop moving and disconnect the right controller.
 Confirm water continues simulating when the desktop page is not visible.

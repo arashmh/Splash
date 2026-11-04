@@ -575,12 +575,15 @@ export class FluidRenderer {
         }
 
         const outputView = targetView ?? context!.getCurrentTexture().createView()
+        // XR may pack both eyes into one attachment. A render-pass clear ignores
+        // viewport/scissor and would erase the eye submitted just before this one.
+        const outputLoadOp: GPULoadOp = targetView ? 'load' : 'clear'
         const fluidPassDescriptor: GPURenderPassDescriptor = {
             colorAttachments: [
                 {
                         view: outputView,
                     clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-                    loadOp: 'clear',
+                    loadOp: outputLoadOp,
                     storeOp: 'store',
                 },
             ],
@@ -630,7 +633,7 @@ export class FluidRenderer {
                 { 
                         view: outputView,
                     clearValue: { r: 0.7, g: 0.7, b: 0.75, a: 1.0 },
-                    loadOp: 'clear',
+                    loadOp: outputLoadOp,
                     storeOp: 'store',
                 },
             ],
@@ -694,7 +697,10 @@ export class FluidRenderer {
             bgColorPassEncoder.end()
 
             const fluidPassEncoder = commandEncoder.beginRenderPass(fluidPassDescriptor)
-            if (viewport) fluidPassEncoder.setViewport(viewport.x, viewport.y, viewport.width, viewport.height, 0, 1)
+            if (viewport) {
+                fluidPassEncoder.setViewport(viewport.x, viewport.y, viewport.width, viewport.height, 0, 1)
+                fluidPassEncoder.setScissorRect(viewport.x, viewport.y, viewport.width, viewport.height)
+            }
             fluidPassEncoder.setBindGroup(0, this.fluidBindGroup)
             fluidPassEncoder.setPipeline(this.fluidPipeline)
             fluidPassEncoder.draw(6)
@@ -715,7 +721,10 @@ export class FluidRenderer {
             spherePassEncoder.end()
 
             const densityRaymarchPassEncoder = commandEncoder.beginRenderPass(densityRaymarchPassDescriptor)
-            if (viewport) densityRaymarchPassEncoder.setViewport(viewport.x, viewport.y, viewport.width, viewport.height, 0, 1)
+            if (viewport) {
+                densityRaymarchPassEncoder.setViewport(viewport.x, viewport.y, viewport.width, viewport.height, 0, 1)
+                densityRaymarchPassEncoder.setScissorRect(viewport.x, viewport.y, viewport.width, viewport.height)
+            }
             densityRaymarchPassEncoder.setBindGroup(0, this.densityRaymarchBindGroup)
             densityRaymarchPassEncoder.setPipeline(this.densityRaymarchPipeline)
             densityRaymarchPassEncoder.draw(6)

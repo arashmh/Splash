@@ -27,6 +27,7 @@ export class XRStick {
     this.device.queue.writeBuffer(this.buffer,0,this.values)
     const pass = encoder.beginRenderPass({colorAttachments:[{view:target,loadOp:'load',storeOp:'store'}]})
     pass.setViewport(viewport.x,viewport.y,viewport.width,viewport.height,0,1)
+    pass.setScissorRect(viewport.x,viewport.y,viewport.width,viewport.height)
     pass.setPipeline(this.pipeline); pass.setBindGroup(0,this.group); pass.draw(2); pass.end()
   }
 }
