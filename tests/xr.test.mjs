@@ -12,7 +12,8 @@ test('XR frame loop, Quest axes, stick rotation, tracking loss and teardown', as
   const session={inputSources:[left,right], updateRenderState(){}, async requestReferenceSpace(){return {}},
     requestAnimationFrame(cb){callback=cb},addEventListener(_,cb){onEnd=cb},async end(){ended=true;onEnd?.()}}
   Object.defineProperty(globalThis,'navigator',{configurable:true,value:{gpu:{},xr:{requestSession:async()=>session}}})
-  globalThis.XRGPUBinding=class {createProjectionLayer(){return {}} getViewSubImage(){return {colorTexture:{createView(){return {}}},getViewDescriptor(){return {}},viewport:{x:0,y:0,width:100,height:100}}}}
+  let hideRight=false
+  globalThis.XRGPUBinding=class {createProjectionLayer(){return {}} getViewSubImage(_layer,view){return {colorTexture:{createView(){return {}}},getViewDescriptor(){return {}},viewport:{x:0,y:0,width:hideRight && view.eye==='right' ? 0 : 100,height:100}}}}
   const ray=new Float32Array(identity); ray[13]=1.4
   let tracked=true
   const leftView=new Float32Array(identity), rightView=new Float32Array(identity)
@@ -21,8 +22,8 @@ test('XR frame loop, Quest axes, stick rotation, tracking loss and teardown', as
   leftProjection[8]=0.12; rightProjection[8]=-0.12
   const captures=[]
   const frame={getViewerPose(){return {views:[
-    {projectionMatrix:leftProjection,transform:{inverse:{matrix:leftView}}},
-    {projectionMatrix:rightProjection,transform:{inverse:{matrix:rightView}}},
+    {eye:'left',projectionMatrix:leftProjection,transform:{inverse:{matrix:leftView}}},
+    {eye:'right',projectionMatrix:rightProjection,transform:{inverse:{matrix:rightView}}},
   ]}},getPose(){return tracked?{transform:{matrix:ray}}:null}}
   await startWebGPUXR({},'rgba8unorm',()=>{
     renders++; captures.push({x:renderUniformsViews.invViewMatrix[12],projection:renderUniformsViews.projectionMatrix[8]})
@@ -44,6 +45,8 @@ test('XR frame loop, Quest axes, stick rotation, tracking loss and teardown', as
   tracked=false; callback(1060,frame)
   assert.equal(xrInput.tracked,false); assert.deepEqual(xrInput.velocity,[0,0,0,0])
   assert.equal(steps,4); assert.equal(renders,8)
+  hideRight=true; callback(1080,frame)
+  assert.equal(renders,9,'zero-width eye must not allocate or render a tiny cached target')
   await session.end(); assert.equal(xrInput.active,false)
   globalThis.XRGPUBinding=class {constructor(){throw new Error('binding failure')}}
   ended=false

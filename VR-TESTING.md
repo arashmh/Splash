@@ -35,9 +35,16 @@ Stereo rendering uses separate per-eye uniforms and intermediate textures,
 with each eye's native aspect ratio. Linear-depth reconstruction unprojects a
 ray through the complete inverse projection. The browser GPU motion test checks
 fixed world points with asymmetric projections, translation, yaw and roll.
-The IWSDK emulator on this machine does not expose XRGPUBinding: its command
-bridge works, but pressing Enter WebGPU VR cannot start this WebGPU session.
-Do not report an emulated immersive test as passed without an active session.
+IWER 2.x does not implement XRGPUBinding. The development-only compatibility
+adapter in dev/webgpu-xr-emulation.ts renders WebGPU into a canvas and presents
+it through IWER's WebGL base layer. It converts IWER's projection clip depth,
+tracks viewport resizing, and delegates poses/controllers to IWER. It is only
+installed when the IWER runtime is detected and is absent from production.
+`node tests/iwsdk-webgpu-session.mjs` verifies an active session, stereo,
+head motion, error logs, screenshot capture and session exit through IWSDK.
+This test passed on 2026-11-04; both eyes were visually inspected. Zero-width
+views are skipped, and eye render targets resize when their viewport changes.
+Emulated results still do not establish physical Quest compositor behavior.
 Physical checks: enter/exit/re-enter VR, inspect both eyes, move/turn, stir with
 the middle of the stick submerged, then stop moving and disconnect the right controller.
 Confirm water continues simulating when the desktop page is not visible.

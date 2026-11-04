@@ -11,6 +11,7 @@ import densityRaymarch from './densityRaymarch.wgsl'
 
 
 export class FluidRenderer {
+    private ownedResources: (GPUTexture | GPUBuffer)[] = []
     groundPipeline: GPURenderPipeline
     groundBindGroup: GPUBindGroup
     depthFilter1DPipeline: GPURenderPipeline
@@ -492,7 +493,14 @@ export class FluidRenderer {
             ]
         })
 
-        console.log(this.densityRaymarchPipeline.getBindGroupLayout(0))
+        this.ownedResources.push(tmpDepthMapTexture, thicknessTexture, tmpThicknessTexture,
+            depthTestTexture, tmpOutputTexture, filterXUniformBuffer, filterYUniformBuffer,
+            thicknessFilterSizeBuffer, this.diffuseColorBuffer, this.colorDensityBuffer)
+    }
+
+    dispose() {
+        for (const resource of this.ownedResources) resource.destroy()
+        this.ownedResources.length = 0
     }
 
 

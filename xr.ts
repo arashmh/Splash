@@ -67,6 +67,7 @@ export async function startWebGPUXR(device: GPUDevice, format: GPUTextureFormat,
       step()
       for (const view of pose.views) {
         const sub = binding.getViewSubImage(layer, view)
+        if (sub.viewport.width <= 0 || sub.viewport.height <= 0) continue
         const projection = new Float32Array(view.projectionMatrix)
         // A session with the webgpu feature already supplies [0,1] clip depth.
         renderUniformsViews.projectionMatrix.set(projection)
