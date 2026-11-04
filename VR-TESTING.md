@@ -25,7 +25,11 @@ Checks: `npm test`, `npm run typecheck`, `npm run build`.
 after both eye draws in fluid and particle modes, checking that neither eye
 clears or writes into the other's region. The XR test checks distinct asymmetric
 projections and scaled 64mm eye separation. On 2026-11-04 these checks passed;
-IWSDK logs confirmed app startup, but XR commands returned target_not_ready.
+IWSDK initially returned target_not_ready for this custom renderer. The
+development-only adapter in dev/iwsdk-bridge.ts supplies the runtime readiness
+contract and delegates XR commands to IWER. XR status, device-state inspection,
+and browser snapshots now succeed, including after reload. This does not add
+native scene/ECS capabilities or prove physical Quest WebGPU XR support.
 Physical checks: enter/exit/re-enter VR, inspect both eyes, move/turn, stir with
 the middle of the stick submerged, then stop moving and disconnect the right controller.
 Confirm water continues simulating when the desktop page is not visible.
